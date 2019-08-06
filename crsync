@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# crsync is wapper around rsync to use config files specified in directories
+# crsync is wrapper around rsync to use config files specified in directories
 # to set the parameters and options of an rsync invocation.
 #
 # syncing a project directory:
