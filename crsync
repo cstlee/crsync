@@ -1,0 +1,103 @@
+#!/bin/bash
+
+# crsync is wapper around rsync to use config files specified in directories
+# to set the parameters and options of an rsync invocation.
+#
+# syncing a project directory:
+#   A project should contain an crsync config in its top level directory.  The
+#   directory containing the config file is considered the root of the directory
+#   tree to be synced.  Invoking crsync from any subdirectory of the project
+#   will sync the entire project.
+
+# Name of expected crsync config file
+CONFIG_FILE=.crsync
+# Name of expected crsync ignore file
+IGNORE_FILE=.crsyncignore
+
+# Return the path to a config file
+function findConfig () {
+    if [ $1 = '/' ]
+    then
+        CONFIG_PATH=/$CONFIG_FILE
+    else
+        CONFIG_PATH=${1%/}/$CONFIG_FILE
+    fi
+
+    if [ -f $CONFIG_PATH ]
+    then
+        echo $CONFIG_PATH
+        return
+    fi
+
+    if [ $1 = '/' ]
+    then
+        return
+    else
+        findConfig $(dirname $1)
+    fi
+}
+
+# Return the absolute path of the given path
+function realpath () {
+    f=$1
+    if [ -d "$f" ]
+    then
+        base=""
+        dir="$f"
+    else
+        base="/$(basename "$f")"
+        dir=$(dirname "$f")
+    fi
+    dir=$(cd "$dir" && /bin/pwd)
+    echo "$dir$base"
+}
+
+###--- MAIN ---###
+
+# Assuming syncing of current directory if no path is provided.
+if [ -z $1 ]
+then
+    DIR=$PWD
+else
+    DIR=$(realpath $1)
+fi
+
+# Find a load the config
+CONFIG_PATH=$(findConfig $DIR)
+if [ -z $CONFIG_PATH ]
+then
+    echo "Nothing Synced; No crsync config found"
+    exit
+fi
+
+source $CONFIG_PATH
+SYNC_ROOT_DIR=$(dirname $CONFIG_PATH)
+
+# Make sure the config specifies a destination server
+if [ -z $DEST ]
+then
+    echo "Nothing Synced; No destination server specifed in $CONFIG_PATH"
+    exit
+fi
+
+# If no destination directory name is provided, assume the name is the same
+# as the local directory to be synced.
+if [ -z $DEST_DIR ]
+then
+    DEST_DIR=$(basename $SYNC_ROOT_DIR)
+fi
+
+# Default options
+OPTIONS="-a -u -v"
+
+# Add ignore option if ignore file is found
+if [ -f $SYNC_ROOT_DIR/$IGNORE_FILE ]
+then
+    OPTIONS=$OPTIONS' --exclude-from '$SYNC_ROOT_DIR/$IGNORE_FILE
+fi
+
+# do the sync
+CMD="rsync $OPTIONS $SYNC_ROOT_DIR/ $DEST:$DEST_DIR"
+echo $CMD
+$CMD
+
